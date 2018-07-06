@@ -4,6 +4,7 @@
 from django.shortcuts import render,redirect
 from models import *
 from hashlib import sha1
+from django.http import HttpResponse,JsonResponse,HttpResponseRedirect
 
 
 def register(request):
@@ -35,6 +36,58 @@ def register_handle(request):
     return redirect('/user/login/')
 
 
+def register_exist(request):
+    uname = request.GET['uname']
+    count = UserInfo.objects.filter(uname=uname).count()
+    data = {'count': count}
+    return JsonResponse(data)
+
+
 def login(request):
-    context = {'title': '用户登陆'}
+    uname = request.COOKIES.get('uname', '')
+    context = {'title': '用户登录', 'error_name': 0, 'error_pwd': 0, 'uname': uname}
     return render(request, 'df_user/login.html', context)
+
+
+def login_handle(request):
+    post = request.POST
+    uname = post.get('username')
+    upwd = post.get('pwd')
+    jizhu = post.get('jizhu')
+    # 根据用户名查询数据,用get查不到会抛异常
+    users = UserInfo.objects.filter(uname=uname)
+    if len(users)==1:
+        s1 = sha1()
+        s1.update(upwd)
+        if s1.hexdigest() == users[0].upwd:
+            red = HttpResponseRedirect('/user/info')
+            # 记住用户名
+            if jizhu != 0:
+                red.set_cookie('uname', uname)
+            else:
+                red.set_cookie('uname', '', max_age=-1)
+            request.session['user_id'] = users[0].id
+            request.session['user_name'] = uname
+            return red
+        else:
+            context = {'title': '用户登录', 'error_name':0, 'error_pwd':1, 'uname': uname}
+            return render(request, 'df_user/login.html', context)
+    else:
+        context = {'title': '用户登录', 'error_name':1, 'error_pwd':0, 'uname': uname}
+        return render(request, 'df_user/login.html', context)
+
+
+def info(request):
+    uemail = UserInfo.objects.get(id=request.session['user_id']).uemail
+    context = {'title': '用户中心', 'uname': request.session['user_name'], 'uemail': uemail}
+    return render(request, 'df_user/user_center_info.html', context)
+
+
+def order(request):
+    context = {'title': '全部订单'}
+    return render(request, 'df_user/user_center_order.html', context)
+
+
+def site(request):
+    context = {'title': '收货地址'}
+    return render(request, 'df_user/user_center_site.html', context)
